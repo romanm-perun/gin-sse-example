@@ -14,10 +14,13 @@ import (
 //     $ go run main.go
 
 func main() {
-	broker := broker.NewServer()
+	broker := broker.NewBroker()
 
 	router := gin.Default()
 	router.GET("/", broker.ServeHTTP)
+
+	// Set it running - listening and broadcasting events
+	go broker.Listen()
 
 	go func() {
 		for {
