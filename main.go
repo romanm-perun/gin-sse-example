@@ -3,17 +3,21 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/romanm-perun/gin-sse-example/broker"
 )
 
 // Example SSE server in Golang.
-//     $ go run sse.go
+//     $ go run main.go
 
 func main() {
 	broker := broker.NewServer()
+
+	router := gin.Default()
+	router.GET("/", broker.ServeHTTP)
 
 	go func() {
 		for {
@@ -24,5 +28,5 @@ func main() {
 		}
 	}()
 
-	log.Fatal("HTTP server error: ", http.ListenAndServe("localhost:3000", broker))
+	log.Fatal("HTTP server error: ", router.Run(":3000"))
 }

@@ -7,10 +7,11 @@
 package broker
 
 import (
-	"fmt"
+	"io"
 	"log"
-	"net/http"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 // the amount of time to wait when pushing a message to
@@ -47,21 +48,11 @@ func NewServer() (broker *Broker) {
 	return
 }
 
-func (broker *Broker) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-
-	// Make sure that the writer supports flushing.
-	//
-	flusher, ok := rw.(http.Flusher)
-
-	if !ok {
-		http.Error(rw, "Streaming unsupported!", http.StatusInternalServerError)
-		return
-	}
-
-	rw.Header().Set("Content-Type", "text/event-stream")
-	rw.Header().Set("Cache-Control", "no-cache")
-	rw.Header().Set("Connection", "keep-alive")
-	rw.Header().Set("Access-Control-Allow-Origin", "*")
+func (broker *Broker) ServeHTTP(c *gin.Context) {
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
 
 	// Each connection registers its own message channel with the Broker's connections registry
 	messageChan := make(chan []byte)
@@ -75,24 +66,16 @@ func (broker *Broker) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		broker.closingClients <- messageChan
 	}()
 
-	// Listen to connection close and un-register messageChan
-	notify := rw.(http.CloseNotifier).CloseNotify()
+	c.Stream(func(w io.Writer) bool {
+		// Write to the ResponseWriter
+		// Server Sent Events compatible
+		c.SSEvent("topic foo", string(<-messageChan))
 
-	for {
-		select {
-		case <-notify:
-			return
-		default:
+		// Flush the data immediately instead of buffering it for later.
+		c.Writer.Flush()
 
-			// Write to the ResponseWriter
-			// Server Sent Events compatible
-			fmt.Fprintf(rw, "data: %s\n\n", <-messageChan)
-
-			// Flush the data immediatly instead of buffering it for later.
-			flusher.Flush()
-		}
-	}
-
+		return true
+	})
 }
 
 func (broker *Broker) listen() {
