@@ -18,34 +18,33 @@ import (
 // a slow client or a client that closed after `range clients` started.
 const patience time.Duration = time.Second * 1
 
-type Broker struct {
+type (
+	NotifierChan chan []byte
 
-	// Events are pushed to this channel by the main events-gathering routine
-	Notifier chan []byte
+	Broker struct {
 
-	// New client connections
-	newClients chan chan []byte
+		// Events are pushed to this channel by the main events-gathering routine
+		Notifier NotifierChan
 
-	// Closed client connections
-	closingClients chan chan []byte
+		// New client connections
+		newClients chan NotifierChan
 
-	// Client connections registry
-	clients map[chan []byte]struct{}
-}
+		// Closed client connections
+		closingClients chan NotifierChan
 
-func NewServer() (broker *Broker) {
-	// Instantiate a broker
-	broker = &Broker{
-		Notifier:       make(chan []byte, 1),
-		newClients:     make(chan chan []byte),
-		closingClients: make(chan chan []byte),
-		clients:        make(map[chan []byte]struct{}),
+		// Client connections registry
+		clients map[NotifierChan]struct{}
 	}
+)
 
-	// Set it running - listening and broadcasting events
-	go broker.listen()
-
-	return
+func NewBroker() (broker *Broker) {
+	// Instantiate a broker
+	return &Broker{
+		Notifier:       make(NotifierChan, 1),
+		newClients:     make(chan NotifierChan),
+		closingClients: make(chan NotifierChan),
+		clients:        make(map[NotifierChan]struct{}),
+	}
 }
 
 func (broker *Broker) ServeHTTP(c *gin.Context) {
@@ -55,7 +54,7 @@ func (broker *Broker) ServeHTTP(c *gin.Context) {
 	c.Header("Access-Control-Allow-Origin", "*")
 
 	// Each connection registers its own message channel with the Broker's connections registry
-	messageChan := make(chan []byte)
+	messageChan := make(NotifierChan)
 
 	// Signal the broker that we have a new connection
 	broker.newClients <- messageChan
@@ -78,7 +77,8 @@ func (broker *Broker) ServeHTTP(c *gin.Context) {
 	})
 }
 
-func (broker *Broker) listen() {
+// Listen for new notifications and redistribute them to clients
+func (broker *Broker) Listen() {
 	for {
 		select {
 		case s := <-broker.newClients:
@@ -106,5 +106,4 @@ func (broker *Broker) listen() {
 			}
 		}
 	}
-
 }
