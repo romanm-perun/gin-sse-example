@@ -30,7 +30,7 @@ type Broker struct {
 	closingClients chan chan []byte
 
 	// Client connections registry
-	clients map[chan []byte]bool
+	clients map[chan []byte]struct{}
 }
 
 func NewServer() (broker *Broker) {
@@ -39,7 +39,7 @@ func NewServer() (broker *Broker) {
 		Notifier:       make(chan []byte, 1),
 		newClients:     make(chan chan []byte),
 		closingClients: make(chan chan []byte),
-		clients:        make(map[chan []byte]bool),
+		clients:        make(map[chan []byte]struct{}),
 	}
 
 	// Set it running - listening and broadcasting events
@@ -85,7 +85,7 @@ func (broker *Broker) listen() {
 
 			// A new client has connected.
 			// Register their message channel
-			broker.clients[s] = true
+			broker.clients[s] = struct{}{}
 			log.Printf("Client added. %d registered clients", len(broker.clients))
 		case s := <-broker.closingClients:
 
