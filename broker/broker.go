@@ -19,7 +19,12 @@ import (
 const patience time.Duration = time.Second * 1
 
 type (
-	NotifierChan chan []byte
+	NotificationEvent struct {
+		EventName string
+		Payload   interface{}
+	}
+
+	NotifierChan chan NotificationEvent
 
 	Broker struct {
 
@@ -48,6 +53,9 @@ func NewBroker() (broker *Broker) {
 }
 
 func (broker *Broker) ServeHTTP(c *gin.Context) {
+	eventName := c.Param("topic")
+	log.Printf("Requested topic: %s\n" + eventName)
+
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -66,9 +74,13 @@ func (broker *Broker) ServeHTTP(c *gin.Context) {
 	}()
 
 	c.Stream(func(w io.Writer) bool {
-		// Write to the ResponseWriter
-		// Server Sent Events compatible
-		c.SSEvent("topic foo", string(<-messageChan))
+		// Emit Server Sent Events compatible
+		event := <-messageChan
+
+		switch eventName {
+		case event.EventName:
+			c.SSEvent(event.EventName, event.Payload)
+		}
 
 		// Flush the data immediately instead of buffering it for later.
 		c.Writer.Flush()
